@@ -7,14 +7,26 @@ a restarts, deploys e reconstrução de containers em produção (GoDeploy).
 
 import json
 import os
-
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
+import logging
 
 from app.core.config import get_settings
 from app.infrastructure.db.session import SessionLocal
 from app.infrastructure.db.models import OAuthToken
+
+logger = logging.getLogger(__name__)
+
+# Importar Google Auth dependencies com fallback gracioso
+try:
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import Flow
+    GOOGLE_AUTH_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Google Auth não disponível: {e}. OAuth will not function.")
+    GOOGLE_AUTH_AVAILABLE = False
+    Request = None
+    Credentials = None
+    Flow = None
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 SERVICE_NAME = "google_drive"
@@ -54,7 +66,10 @@ def _load_credentials_config() -> dict:
     )
 
 
-def _build_flow(state: str | None = None) -> Flow:
+def _build_flow(state: str | None = None):
+    if not GOOGLE_AUTH_AVAILABLE:
+        raise RuntimeError("Google Auth libraries not installed. Install google-auth, google-auth-oauthlib, google-api-python-client")
+
     settings = get_settings()
     creds_config = _load_credentials_config()
 
@@ -116,12 +131,16 @@ def _save_credentials(creds: Credentials) -> None:
         session.close()
 
 
-def load_credentials() -> Credentials | None:
+def load_credentials():
     """Carrega credenciais do PostgreSQL (ou arquivo como fallback).
 
     Prioriza PostgreSQL (produção), fallback para arquivo (desenvolvimento).
     Auto-refresh automático se token expirado.
     """
+    if not GOOGLE_AUTH_AVAILABLE:
+        logger.warning("Google Auth not available - returning None")
+        return None
+
     session = SessionLocal()
     try:
         record = session.query(OAuthToken).filter_by(service_name=SERVICE_NAME).first()
