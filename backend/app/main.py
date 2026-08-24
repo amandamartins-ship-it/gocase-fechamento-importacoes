@@ -1,10 +1,14 @@
 import logging
+import traceback
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# Variáveis de diagnóstico
+drive_import_error = None
 
 # Importar routers com debug
 try:
@@ -23,8 +27,9 @@ try:
     from app.api.routers import drive
     logger.info("✓ drive router imported")
 except Exception as e:
-    logger.error(f"✗ Failed to import drive: {e}")
+    logger.exception("✗ ERRO AO IMPORTAR DRIVE - TRACEBACK COMPLETO:")
     drive = None
+    drive_import_error = traceback.format_exc()
 
 try:
     from app.api.routers import fechamento, health, processos, rateio, razao
@@ -58,12 +63,31 @@ app.add_middleware(
 # Endpoint de diagnóstico ANTES de registrar routers
 @app.get("/diag-status")
 def diag_status() -> dict:
-    """Diagnóstico de status do app"""
+    """Diagnóstico completo de status do app e routers"""
+    # Coletar todas as rotas registradas
+    routes = []
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", None)
+        if path:
+            routes.append({
+                "path": path,
+                "methods": sorted(list(methods)) if methods else []
+            })
+
+    # Verificar se /drive/oauth/status está registrada
+    drive_oauth_status_registered = any(
+        r["path"] == "/drive/oauth/status" for r in routes
+    )
+
     return {
         "app_running": True,
         "drive_imported": drive is not None,
-        "drive_is_none": drive is None,
-        "message": "app is running"
+        "drive_router_exists": bool(drive and hasattr(drive, "router")),
+        "drive_router_registered": drive_oauth_status_registered,
+        "drive_import_error": drive_import_error,
+        "all_routes": sorted(routes, key=lambda r: r["path"]),
+        "drive_related_routes": [r for r in routes if "drive" in r["path"] or "oauth" in r["path"]]
     }
 
 app.include_router(health.router)
