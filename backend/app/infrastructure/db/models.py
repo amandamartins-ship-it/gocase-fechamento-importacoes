@@ -195,3 +195,17 @@ class Fechamento(Base):
     )
 
     processo: Mapped["Processo"] = relationship(back_populates="fechamentos")
+
+
+class OAuthToken(Base):
+    """Token persistido de integração OAuth com Google Drive."""
+
+    __tablename__ = "oauth_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    service_name: Mapped[str] = mapped_column(String(100), unique=True, index=True)  # "google_drive"
+    token_data: Mapped[dict] = mapped_column(JSON)  # access_token, refresh_token, expires_in, etc.
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
