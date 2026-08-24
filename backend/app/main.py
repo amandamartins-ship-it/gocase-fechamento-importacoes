@@ -55,6 +55,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Endpoint de diagnóstico ANTES de registrar routers
+@app.get("/diag-status")
+def diag_status() -> dict:
+    """Diagnóstico de status do app"""
+    return {
+        "app_running": True,
+        "drive_imported": drive is not None,
+        "drive_is_none": drive is None,
+        "message": "app is running"
+    }
+
 app.include_router(health.router)
 app.include_router(auth.router)
 if drive:
