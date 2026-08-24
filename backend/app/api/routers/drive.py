@@ -22,6 +22,12 @@ from app.infrastructure.repositories.regras_aprendidas_repository import SqlAlch
 router = APIRouter(prefix="/drive", tags=["drive"])
 
 
+@router.get("/health")
+def drive_health() -> dict:
+    """Endpoint de teste para verificar se o router está carregado"""
+    return {"status": "drive router is loaded"}
+
+
 @router.get("/oauth/login", response_model=AuthorizationUrlResponse)
 def oauth_login(_email: str = Depends(get_current_user)) -> AuthorizationUrlResponse:
     try:
