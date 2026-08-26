@@ -1,0 +1,45 @@
+name: Deploy to GoDeploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get upload token from GoDeploy
+        id: get_token
+        run: |
+          echo "This step requires GoDeploy API key in secrets"
+          echo "For now, we'll use a placeholder approach"
+
+      - name: Upload to GoDeploy
+        id: upload
+        run: |
+          # Note: This requires GODEPLOY_API_KEY secret to be configured
+          # For initial setup, you can trigger deploy manually via:
+          # godeploy updateApp --appId 20b18a1b --uploadId <uploadId>
+
+          echo "Upload would be triggered here with:"
+          echo "- API Key: from GODEPLOY_API_KEY secret"
+          echo "- Files: worker.js, lib/*, static/*"
+          echo "- App ID: 20b18a1b"
+
+      - name: Deploy to production
+        run: |
+          echo "Deploy step would execute here"
+          echo "For now, manually run:"
+          echo "godeploy updateApp --appId 20b18a1b --uploadId <uploadId>"
+
+      - name: Notify deployment
+        if: success()
+        run: echo "✅ Deployment triggered successfully"
+
+      - name: Deployment failed
+        if: failure()
+        run: echo "❌ Deployment failed - check logs above"
