@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rateador do Razão — GOCASE</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <nav class="sidebar">
+        <div class="sidebar-brand">GOCASE Importações</div>
+        <a href="#/rateador" class="sidebar-link" data-view="rateador">Rateador</a>
+        <a href="#/conciliador" class="sidebar-link" data-view="conciliador">Conciliador de Importações</a>
+      </nav>
+
+      <div class="app-content">
+        <div id="view-rateador">
+          <header class="topbar">
+            <h1>Rateador do Razão</h1>
+            <p class="subtitle">Importações — divide lançamentos multi-processo por quantidade de item na NF</p>
+          </header>
+
+          <main>
+            <section class="card" id="cardMaster">
+              <div class="card-header">
+                <h2>1. Controle de Importações</h2>
+              </div>
+              <p id="masterStatus" class="muted">Carregando status...</p>
+              <input type="file" id="inputControle" accept=".xlsx" />
+              <button id="btnEnviarControle" class="btn ghost" disabled>Enviar planilha</button>
+              <p id="controleErro" class="error"></p>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>2. Enviar Razão do mês</h2>
+              </div>
+              <input type="file" id="inputRazao" accept=".csv,.txt" />
+              <button id="btnProcessar" class="btn primary" disabled>Processar rateio</button>
+              <p id="uploadErro" class="error"></p>
+            </section>
+
+            <section class="card" id="cardResumo" hidden>
+              <div class="card-header">
+                <h2>3. Resumo</h2>
+                <button id="btnBaixar" class="btn primary">Baixar Excel atualizado</button>
+              </div>
+              <div class="grid-resumo">
+                <div class="stat"><span class="stat-label">Lançamentos</span><span class="stat-value" id="statLancamentos">—</span></div>
+                <div class="stat"><span class="stat-label">Linhas rateadas</span><span class="stat-value" id="statRateados">—</span></div>
+                <div class="stat"><span class="stat-label">Pendências</span><span class="stat-value" id="statPendencias">—</span></div>
+                <div class="stat" id="statSaldo"><span class="stat-label">Saldo antes × depois</span><span class="stat-value" id="statSaldoValor">—</span></div>
+              </div>
+              <div id="pendenciasBox" hidden>
+                <h3>Pendências (linhas não rateadas, enviadas sem divisão)</h3>
+                <ul id="pendenciasList"></ul>
+              </div>
+            </section>
+
+            <section class="card" id="cardPreview" hidden>
+              <div class="card-header">
+                <h2>4. Prévia (primeiras linhas)</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Histórico</th>
+                      <th class="num">Débito</th>
+                      <th class="num">Crédito</th>
+                      <th class="num">Saldo</th>
+                      <th>Processo</th>
+                      <th>Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody id="previewBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </main>
+        </div>
+
+        <div id="view-conciliador" hidden>
+          <header class="topbar">
+            <h1>Conciliador de Importações</h1>
+            <p class="subtitle">Reconstrói a composição contábil de cada processo e ajuda no fechamento</p>
+          </header>
+
+          <main>
+            <section class="card">
+              <div class="card-header">
+                <h2>0. Carregar Histórico de Importações</h2>
+              </div>
+              <p class="muted">Primeira vez: envie o arquivo "Importações em Andamento" para popular a base histórica. Nos próximos meses, será atualizado automaticamente com os rateios.</p>
+              <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="file" id="cncInputHistorico" accept=".xlsx" style="flex: 1;" />
+                <button id="cncBtnCarregarHistorico" class="btn primary" disabled>Carregar Base Histórica</button>
+              </div>
+              <p id="cncHistoricoMsg" class="muted"></p>
+              <p id="cncHistoricoErro" class="error"></p>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>1. Enviar Razão Rateado</h2>
+              </div>
+              <p class="muted">Envie o Excel gerado pelo Rateador ("Baixar Excel atualizado") - não o Razão bruto.</p>
+              <input type="file" id="cncInputRazao" accept=".xlsx" />
+              <button id="cncBtnProcessar" class="btn primary" disabled>Processar Conciliação</button>
+              <p id="cncUploadErro" class="error"></p>
+            </section>
+
+            <section class="card" id="cncCardProcessos" hidden>
+              <div class="card-header">
+                <h2>2. Processos</h2>
+                <button id="cncBtnRelatorio" class="btn primary">Finalizar Relatório de Fechamento</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Processo</th>
+                      <th>Status</th>
+                      <th class="num">Débito</th>
+                      <th class="num">Crédito</th>
+                      <th class="num">Informado</th>
+                      <th class="num">Saldo Final</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="cncProcessosBody"></tbody>
+                </table>
+              </div>
+              <p id="cncRelatorioErro" class="error"></p>
+            </section>
+
+            <section class="card" id="cncCardRelatorio" hidden>
+              <div class="card-header">
+                <h2>3. Lançamento de Fechamento pronto ✓</h2>
+                <button id="cncBtnBaixarRelatorio" class="btn primary">Baixar CSV para Importação</button>
+              </div>
+              <p class="muted" id="cncRelatorioResumo"></p>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Conta</th>
+                      <th>Unidade</th>
+                      <th>C. Resultado</th>
+                      <th class="num">Valor</th>
+                      <th>D/C</th>
+                      <th>Histórico</th>
+                      <th>Agrupador</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cncRelatorioBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="card" id="cncCardDetalhe" hidden>
+              <div class="card-header">
+                <h2 id="cncDetalheTitulo">3. Composição do processo</h2>
+                <button id="cncBtnVoltar" class="btn ghost">Voltar à lista</button>
+              </div>
+
+              <div class="conciliador-detalhe-grid">
+                <div>
+                  <h3>Composição por natureza</h3>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Categoria</th>
+                          <th class="num">Contabilizado (Débito)</th>
+                          <th class="num">Contabilizado (Crédito)</th>
+                          <th class="num">Informado</th>
+                          <th class="num">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody id="cncComposicaoBody"></tbody>
+                    </table>
+                  </div>
+
+                  <h3>Despesas da Importação</h3>
+                  <p class="muted">Informe manualmente as despesas ainda não contabilizadas - o recálculo é imediato. Clique em "Salvar Despesas" para confirmar antes de sair.</p>
+                  <div class="despesas-grid" id="cncDespesasGrid"></div>
+                  <div class="row-salvar-despesas">
+                    <button id="cncBtnSalvarDespesas" class="btn primary">Salvar Despesas</button>
+                    <span id="cncDespesasSalvarMsg" class="muted"></span>
+                  </div>
+
+                  <h3>Tributos e Frete Declarados na DI</h3>
+                  <p class="muted">Valores de referência da DI, usados no encontro de contas com Numerário/NF Entrada e no confronto de Frete - não somam direto como despesa.</p>
+                  <div class="despesas-grid" id="cncTributosDiGrid"></div>
+                  <div class="row-salvar-despesas">
+                    <button id="cncBtnSalvarTributosDi" class="btn primary">Salvar Tributos DI</button>
+                    <span id="cncTributosDiSalvarMsg" class="muted"></span>
+                  </div>
+                </div>
+
+                <aside class="painel-lateral">
+                  <h3>Resumo do processo</h3>
+                  <div class="stat"><span class="stat-label">Total Débitos</span><span class="stat-value" id="cncPainelDebito">—</span></div>
+                  <div class="stat"><span class="stat-label">Total Créditos</span><span class="stat-value" id="cncPainelCredito">—</span></div>
+                  <div class="stat"><span class="stat-label">Despesas informadas</span><span class="stat-value" id="cncPainelInformado">—</span></div>
+                  <div class="stat" id="cncPainelSaldoBox"><span class="stat-label">Saldo Final</span><span class="stat-value" id="cncPainelSaldo">—</span></div>
+                  <div class="stat"><span class="stat-label">Status</span><span class="stat-value" id="cncPainelStatus">—</span></div>
+                  <div id="cncDicasBox" hidden>
+                    <h4>Possível explicação da diferença</h4>
+                    <ul id="cncDicasList"></ul>
+                  </div>
+                  <button id="cncBtnMarcarFechado" class="btn primary">Marcar como Fechado</button>
+                  <button id="cncBtnReabrir" class="btn ghost" hidden>Reabrir processo</button>
+                  <p id="cncFechamentoMsg" class="muted"></p>
+
+                  <h3>Encontro de Contas — Tributos da DI</h3>
+                  <div class="stat"><span class="stat-label">Total Declarado na DI</span><span class="stat-value" id="cncEncontroDITotalDeclarado">—</span></div>
+                  <div class="stat"><span class="stat-label">Numerário Pago</span><span class="stat-value" id="cncEncontroDINumerario">—</span></div>
+                  <div class="stat"><span class="stat-label">NF Entrada Emitida</span><span class="stat-value" id="cncEncontroDINfEntrada">—</span></div>
+                  <div class="stat"><span class="stat-label">Resíduo</span><span class="stat-value" id="cncEncontroDIResiduo">—</span></div>
+                  <p><span class="pill" id="cncEncontroDIRotulo">—</span></p>
+                </aside>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div id="cncAuditoriaModal" class="modal-overlay" hidden>
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 id="cncAuditoriaTitulo">Lançamentos de origem</h3>
+          <button id="cncAuditoriaFechar" class="btn ghost">Fechar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Conta</th>
+                <th>Histórico</th>
+                <th class="num">Débito</th>
+                <th class="num">Crédito</th>
+                <th>Processo</th>
+              </tr>
+            </thead>
+            <tbody id="cncAuditoriaBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+    <script src="/conciliador.js"></script>
+  </body>
+</html>
