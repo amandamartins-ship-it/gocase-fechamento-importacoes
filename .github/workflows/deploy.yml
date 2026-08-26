@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+env:
+  APP_ID: "20b18a1b"
+  GODEPLOY_API_URL: "https://admin.devgogroup.com/api/deploy/v1"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,34 +16,181 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Get upload token from GoDeploy
-        id: get_token
-        run: |
-          echo "This step requires GoDeploy API key in secrets"
-          echo "For now, we'll use a placeholder approach"
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
 
-      - name: Upload to GoDeploy
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate files exist
+        run: |
+          test -f worker.js || (echo "❌ worker.js not found" && exit 1)
+          test -f package.json || (echo "❌ package.json not found" && exit 1)
+          test -d lib || (echo "❌ lib directory not found" && exit 1)
+          test -d static || (echo "❌ static directory not found" && exit 1)
+          echo "✅ All required files present"
+
+      - name: Create deployment package
+        run: |
+          # Create a list of all files to deploy
+          echo "Files to deploy:"
+          echo "  - worker.js"
+          echo "  - package.json"
+          find lib -type f -name "*.js" | sed 's/^/  - /'
+          find static -type f | sed 's/^/  - /'
+
+          # Verify Cloudflare Worker syntax (basic check)
+          if ! grep -q "export default" worker.js; then
+            echo "❌ worker.js does not contain 'export default'"
+            exit 1
+          fi
+          echo "✅ worker.js export validation passed"
+
+      - name: Get GoDeploy upload token
+        id: upload_token
+        run: |
+          echo "Getting upload token from GoDeploy..."
+          # Note: This step authenticates using GODEPLOY_API_KEY
+          # The API endpoint should return: { uploadToken, uploadUrl, expiresInSeconds }
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GODEPLOY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${GODEPLOY_API_URL}/apps/${APP_ID}/getUploadToken" \
+            -d '{}')
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Failed to get upload token from GoDeploy"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          UPLOAD_TOKEN=$(echo "$RESPONSE" | grep -o '"uploadToken":"[^"]*' | cut -d'"' -f4)
+          UPLOAD_URL=$(echo "$RESPONSE" | grep -o '"uploadUrl":"[^"]*' | cut -d'"' -f4)
+
+          if [ -z "$UPLOAD_TOKEN" ] || [ -z "$UPLOAD_URL" ]; then
+            echo "❌ Invalid response from GoDeploy"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "upload_token=$UPLOAD_TOKEN" >> $GITHUB_OUTPUT
+          echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+          echo "✅ Upload token obtained"
+
+      - name: Upload files to GoDeploy
         id: upload
         run: |
-          # Note: This requires GODEPLOY_API_KEY secret to be configured
-          # For initial setup, you can trigger deploy manually via:
-          # godeploy updateApp --appId 20b18a1b --uploadId <uploadId>
+          UPLOAD_URL="${{ steps.upload_token.outputs.upload_url }}"
+          UPLOAD_TOKEN="${{ steps.upload_token.outputs.upload_token }}"
 
-          echo "Upload would be triggered here with:"
-          echo "- API Key: from GODEPLOY_API_KEY secret"
-          echo "- Files: worker.js, lib/*, static/*"
-          echo "- App ID: 20b18a1b"
+          echo "Uploading files to GoDeploy..."
+
+          # Create multipart upload with all necessary files
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $UPLOAD_TOKEN" \
+            -F "package.json=@./package.json" \
+            -F "worker.js=@./worker.js" \
+            -F "static/index.html=@./static/index.html" \
+            -F "static/style.css=@./static/style.css" \
+            -F "static/app.js=@./static/app.js" \
+            -F "static/conciliador.js=@./static/conciliador.js" \
+            -F "static/processos.js=@./static/processos.js" \
+            -F "lib/base64.js=@./lib/base64.js" \
+            -F "lib/dbCache.js=@./lib/dbCache.js" \
+            -F "lib/importacoesParser.js=@./lib/importacoesParser.js" \
+            -F "lib/importacoesRepository.js=@./lib/importacoesRepository.js" \
+            -F "lib/money.js=@./lib/money.js" \
+            -F "lib/rateioEngine.js=@./lib/rateioEngine.js" \
+            -F "lib/razaoParser.js=@./lib/razaoParser.js" \
+            -F "lib/xlsxExport.js=@./lib/xlsxExport.js" \
+            -F "lib/xlsxMinimalReader.js=@./lib/xlsxMinimalReader.js" \
+            -F "lib/zipReader.js=@./lib/zipReader.js" \
+            -F "lib/conciliador/categoriaClassifier.js=@./lib/conciliador/categoriaClassifier.js" \
+            -F "lib/conciliador/composicaoEngine.js=@./lib/conciliador/composicaoEngine.js" \
+            -F "lib/conciliador/despesasRepository.js=@./lib/conciliador/despesasRepository.js" \
+            -F "lib/conciliador/fechamentoContabilExport.js=@./lib/conciliador/fechamentoContabilExport.js" \
+            -F "lib/conciliador/razaoRateadoXlsxParser.js=@./lib/conciliador/razaoRateadoXlsxParser.js" \
+            -F "lib/conciliador/statusRepository.js=@./lib/conciliador/statusRepository.js" \
+            -F "lib/conciliador/tributosDiRepository.js=@./lib/conciliador/tributosDiRepository.js" \
+            "$UPLOAD_URL")
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Upload failed"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          UPLOAD_ID=$(echo "$RESPONSE" | grep -o '"uploadId":"[^"]*' | cut -d'"' -f4)
+
+          if [ -z "$UPLOAD_ID" ]; then
+            echo "❌ Invalid upload response"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "upload_id=$UPLOAD_ID" >> $GITHUB_OUTPUT
+          echo "✅ Files uploaded successfully (ID: $UPLOAD_ID)"
 
       - name: Deploy to production
+        id: deploy
         run: |
-          echo "Deploy step would execute here"
-          echo "For now, manually run:"
-          echo "godeploy updateApp --appId 20b18a1b --uploadId <uploadId>"
+          UPLOAD_ID="${{ steps.upload.outputs.upload_id }}"
 
-      - name: Notify deployment
+          echo "Deploying to App ID: $APP_ID"
+
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GODEPLOY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${GODEPLOY_API_URL}/apps/${APP_ID}/deploy" \
+            -d "{
+              \"uploadId\": \"$UPLOAD_ID\",
+              \"entrypoint\": \"worker.js\",
+              \"assets\": [
+                \"index.html\",
+                \"style.css\",
+                \"app.js\",
+                \"conciliador.js\",
+                \"processos.js\"
+              ]
+            }")
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Deploy API call failed"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          # Check for errors in response
+          if echo "$RESPONSE" | grep -q '"error"'; then
+            echo "❌ GoDeploy returned error"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "$RESPONSE"
+          echo "✅ Deploy to GoDeploy completed"
+
+      - name: Verify deployment status
+        run: |
+          echo "Deployment initiated successfully!"
+          echo "App ID: $APP_ID"
+          echo "Expected URL: https://fechamento-de-importacoes.devgogroup.com"
+          echo ""
+          echo "Next steps:"
+          echo "1. Wait 2-5 minutes for deployment to complete"
+          echo "2. Check: https://fechamento-de-importacoes.devgogroup.com"
+          echo "3. Test the fix in the app"
+
+      - name: Deployment success
         if: success()
-        run: echo "✅ Deployment triggered successfully"
+        run: echo "✅ Auto-Deploy SUCCEEDED"
 
       - name: Deployment failed
         if: failure()
-        run: echo "❌ Deployment failed - check logs above"
+        run: |
+          echo "❌ Auto-Deploy FAILED"
+          echo "Check the logs above for details"
+          exit 1
