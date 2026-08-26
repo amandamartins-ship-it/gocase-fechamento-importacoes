@@ -1,18 +1,39 @@
 {
-  "appId": "c8c75eb7",
+  "appId": "20b18a1b",
   "slug": "fechamento-de-importacoes",
-  "files": [
-    "frontend/src/components/RazaoDashboard.tsx",
-    "frontend/src/pages/Home.tsx",
-    "frontend/src/api/client.ts",
-    "frontend/src/components/ProcessoTable.tsx",
-    "frontend/src/components/CorrectionPanel.tsx",
-    "frontend/src/pages/Login.tsx",
-    "frontend/src/App.tsx",
-    "frontend/src/main.tsx",
-    "frontend/package.json",
-    "backend/app/main.py",
-    "backend/app/api/routers/processos.py"
+  "entrypoint": "worker.js",
+  "assets": [
+    "index.html",
+    "style.css",
+    "app.js",
+    "conciliador.js",
+    "processos.js"
   ],
-  "description": "Deploy Razão Dashboard com nova feature de análise de débitos, créditos e saldo"
+  "files": [
+    "worker.js",
+    "package.json",
+    "lib/base64.js",
+    "lib/dbCache.js",
+    "lib/importacoesParser.js",
+    "lib/importacoesRepository.js",
+    "lib/money.js",
+    "lib/rateioEngine.js",
+    "lib/razaoParser.js",
+    "lib/xlsxExport.js",
+    "lib/xlsxMinimalReader.js",
+    "lib/zipReader.js",
+    "lib/conciliador/categoriaClassifier.js",
+    "lib/conciliador/composicaoEngine.js",
+    "lib/conciliador/despesasRepository.js",
+    "lib/conciliador/fechamentoContabilExport.js",
+    "lib/conciliador/razaoRateadoXlsxParser.js",
+    "lib/conciliador/statusRepository.js",
+    "lib/conciliador/tributosDiRepository.js",
+    "static/index.html",
+    "static/style.css",
+    "static/app.js",
+    "static/conciliador.js",
+    "static/processos.js"
+  ],
+  "description": "Fechamento de Importações - Rateador + Conciliador (Cloudflare Worker)"
 }
